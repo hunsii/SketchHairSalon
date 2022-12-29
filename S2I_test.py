@@ -17,7 +17,7 @@ class Sk2Image:
         model_name = '/'.join(load_path.split('/')[2:])
         print("Model Sk2Image (%s) is loaded."%model_name)
     
-    def getResult(self,inputs,img,matte):
+    def getResult(self,inputs,img,matte, thred=1):
             
         h,w = img.shape[:2]
         noise = self.generate_noise(w,h)
@@ -35,10 +35,10 @@ class Sk2Image:
         
         with torch.no_grad():
             self.model.eval()
-            result_tensor = self.model(inputs,img_tensor, M,N)
+            result_tensor, hair_matte_tensor = self.model(inputs,img_tensor, M,N, thred=thred)
             result = ((result_tensor[0]+1)/2*255).cpu().numpy().transpose(1,2,0).astype("uint8")
-        
-        return result
+            hair_matte = ((hair_matte_tensor[0]+1)/2*255).cpu().numpy().transpose(1,2,0).astype("uint8")
+        return result, hair_matte
 
     def generate_noise(self, width, height):
         weight = 1.0

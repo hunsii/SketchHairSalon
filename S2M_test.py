@@ -31,6 +31,7 @@ class Sk2Matte:
 if __name__ == "__main__":
     ## You can prepare your own sketch for matte generation, i.e., hair strokes as 255, non-hair strokes as 0, background as 128
 
+    
     # For unbraided hairstyle, run 'python S2I_test'
     # For braided hairstyle, run 'python S2I_test braid'
     if len(sys.argv) == 1:
