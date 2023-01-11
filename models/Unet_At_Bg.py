@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .attention import AttentionModule
+import cv2
+import numpy as np
 
 class UnetAtGenerator(nn.Module):
 
@@ -144,7 +146,7 @@ class UnetAtBgGenerator(nn.Module):
         self.bg_encoder = BgEncoder(ngf=ngf,use_bias=use_bias)
 
     # forward method
-    def forward(self, input, img=None, matte=None, noise=None):
+    def forward(self, input, img=None, matte=None, noise=None, thred=1):
         
         e1 = self.conv1(input)
         e2 = self.conv2_bn(self.conv2(F.leaky_relu(e1, 0.2)))
@@ -169,7 +171,8 @@ class UnetAtBgGenerator(nn.Module):
         d3 = torch.cat([d3, e5], 1)
         at_d3 = self.at3(d3)
 
-        bg_feats, hair_mattes = self.bg_encoder(img, matte, noise)
+
+        bg_feats, hair_mattes, hair_matte  = self.bg_encoder(img, matte, noise, thred)
 
         d4 = self.deconv4_bn(self.deconv4(F.relu(at_d3)))
         d4 = torch.cat([d4, e4], 1)
@@ -192,7 +195,7 @@ class UnetAtBgGenerator(nn.Module):
         final = self.conv_final(F.relu(d_8))
         o_f = torch.tanh(final)
         
-        return o_f
+        return o_f, hair_matte
 
 class BgEncoder(nn.Module):
     def __init__(self, ngf,use_bias=False):
@@ -203,10 +206,12 @@ class BgEncoder(nn.Module):
         self.layer2 = ConvBlock(2 * self.ngf, 4 * self.ngf, 4, 2, 1, norm='bn', activation='relu', pad_type='reflect', use_bias=use_bias)
         self.layer3 = ConvBlock(4 * self.ngf, 8 * self.ngf, 4, 2, 1, norm='bn', activation='relu', pad_type='reflect', use_bias=use_bias)
 
-    def forward(self, image, mask, noise):
+    def forward(self, image, mask, noise, thred):
         hair_matte = torch.unsqueeze(mask[:, 0, :, :], 1)
-
-        input = image * (1 - hair_matte) + noise * hair_matte
+        # hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+        # h, s, v = cv2.split(hsv)
+        # lim = 
+        input = image * (1 - hair_matte) * thred + noise * hair_matte
 
         x0 = self.conv1(input) # 64
         x1 = self.layer1(x0) # 1/2 64*2
@@ -218,7 +223,7 @@ class BgEncoder(nn.Module):
         hair_matte2 = F.interpolate(hair_matte, size=(int(sh / 4), int(sw / 4)), mode='nearest')
         hair_matte3 = F.interpolate(hair_matte, size=(int(sh / 8), int(sw / 8)), mode='nearest')
 
-        return [x3, x2, x1, x0], [hair_matte3, hair_matte2, hair_matte1, hair_matte]
+        return [x3, x2, x1, x0], [hair_matte3, hair_matte2, hair_matte1, hair_matte], noise * hair_matte
 
 class ConvBlock(nn.Module):
     def __init__(self, input_dim, output_dim, kernel_size, stride,
